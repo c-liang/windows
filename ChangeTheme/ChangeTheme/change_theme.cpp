@@ -13,6 +13,32 @@
 
 #include "theme_traits.h"
 
+HRESULT get_current_theme_path(std::wstring& theme_path) {
+  HRESULT hr = E_NOTIMPL;
+  do {
+    HKEY key_result;
+    auto status =
+        RegOpenKeyExW(HKEY_CURRENT_USER,
+                      L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes",
+                      0, KEY_READ, &key_result);
+    if (status != ERROR_SUCCESS) {
+      hr = HRESULT_FROM_WIN32(GetLastError());
+      break;
+    }
+
+    DWORD byte_size = 2 * MAX_PATH * sizeof(wchar_t);
+    wchar_t local_mem[2 * MAX_PATH]{0};
+    status = RegQueryValueExW(key_result, L"CurrentTheme", nullptr, nullptr,
+                              (LPBYTE)&local_mem[0], &byte_size);
+    if (status != ERROR_SUCCESS) {
+      hr = HRESULT_FROM_WIN32(GetLastError());
+      break;
+    }
+    theme_path = local_mem;
+  } while (false);
+  return hr;
+}
+
 HRESULT apply_theme(const wchar_t* theme_file) {
   std::error_code err;
   if (!std::filesystem::exists(theme_file, err)) {
@@ -31,8 +57,7 @@ HRESULT apply_theme(const wchar_t* theme_file) {
   if (FAILED(hr)) {
     return hr;
   }
-  BSTR new_theme_file =
-      ::SysAllocString(L"C:\\Windows\\Resources\\Themes\\aero.theme");
+  BSTR new_theme_file = ::SysAllocString(theme_file);
   if (!new_theme_file) {
     return HRESULT_FROM_WIN32(ERROR_OUTOFMEMORY);
   }
@@ -41,7 +66,7 @@ HRESULT apply_theme(const wchar_t* theme_file) {
   return hr;
 }
 
-HRESULT get_display_name(std::wstring& theme_name){
+HRESULT get_display_name(std::wstring& theme_name) {
   Microsoft::WRL::ComPtr<IClassFactory> factory;
 
   HRESULT hr =
@@ -57,14 +82,12 @@ HRESULT get_display_name(std::wstring& theme_name){
   }
   Microsoft::WRL::ComPtr<IThemeShared> theme_shared;
   theme_manager_shared->get_CurrentTheme(&theme_shared);
-  if (FAILED(hr))
-  {
+  if (FAILED(hr)) {
     return hr;
   }
   WCHAR* display_name;
   hr = theme_shared->get_DisplayName(&display_name);
-  if (SUCCEEDED(hr))
-  {
+  if (SUCCEEDED(hr)) {
     theme_name = display_name;
   }
   return hr;
@@ -97,15 +120,23 @@ HRESULT get_visual_style(std::wstring& visual_style) {
 }
 int main() {
   HRESULT hr = CoInitialize(nullptr);
+  std::wstring current_theme_path;
+  get_current_theme_path(current_theme_path);
+
   std::wstring display_name;
   hr = get_display_name(display_name);
+  std::wcout << display_name;
   std::cout << hr << std::endl;
   std::wstring visual_style;
   hr = get_visual_style(visual_style);
+  std::wcout << visual_style;
   std::cout << hr << std::endl;
   apply_theme(L"C:\\Windows\\Resources\\Themes\\aero.theme");
   std::cout << hr << std::endl;
+
+  // apply_theme(current_theme_path.c_str());
   CoUninitialize();
+  system("pause");
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
